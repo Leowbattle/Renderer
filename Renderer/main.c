@@ -75,6 +75,13 @@ void MS_multisample_resolve(MultisampleFramebuffer* fb, rgb* dest) {
 	}
 }
 
+int SAMPLE_PATTERN[4][2] = {
+	{-2, -6},
+	{6, -2},
+	{-6, 2},
+	{2, 6},
+};
+
 void MS_tri(MultisampleFramebuffer* fb, int x0, int y0, int x1, int y1, int x2, int y2, rgb c) {
 	x0 *= 16;
 	y0 *= 16;
@@ -89,52 +96,23 @@ void MS_tri(MultisampleFramebuffer* fb, int x0, int y0, int x1, int y1, int x2, 
 	int bottom = max(max(y0, y1), y2) & ~15;
 
 	for (int y = top; y <= bottom; y += 16) {
-		int e01_0 = ((y0 == y1 && x1 < x0) || (y1 < y0));
-		int e12_0 = ((y1 == y2 && x2 < x1) || (y2 < y1));
-		int e20_0 = ((y2 == y0 && x0 < x2) || (y0 < y2));
-
-		int e01_1 = ((y0 == y1 && x1 < x0) || (y1 < y0));
-		int e12_1 = ((y1 == y2 && x2 < x1) || (y2 < y1));
-		int e20_1 = ((y2 == y0 && x0 < x2) || (y0 < y2));
-
-		int e01_2 = ((y0 == y1 && x1 < x0) || (y1 < y0));
-		int e12_2 = ((y1 == y2 && x2 < x1) || (y2 < y1));
-		int e20_2 = ((y2 == y0 && x0 < x2) || (y0 < y2));
-
-		int e01_3 = ((y0 == y1 && x1 < x0) || (y1 < y0));
-		int e12_3 = ((y1 == y2 && x2 < x1) || (y2 < y1));
-		int e20_3 = ((y2 == y0 && x0 < x2) || (y0 < y2));
-
 		for (int x = left; x <= right; x += 16) {
 			int px = x / 16;
 			int py = y / 16;
 
-			e01_0 += ((x + 2) - x0) * (y1 - y0) - ((y + 10) - y0) * (x1 - x0);
-			e12_0 += ((x + 2) - x1) * (y2 - y1) - ((y + 10) - y1) * (x2 - x1);
-			e20_0 += ((x + 2) - x2) * (y0 - y2) - ((y + 10) - y2) * (x0 - x2);
-			if (e01_0 > 0 && e12_0 > 0 && e20_0 > 0) {
-				fb->data[py * fb->width + px][0] = c;
-			}
+			int e01 = ((x + 8) - x0) * (y1 - y0) - ((y + 8) - y0) * (x1 - x0) + ((y0 == y1 && x1 < x0) || (y1 < y0));
+			int e12 = ((x + 8) - x1) * (y2 - y1) - ((y + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
+			int e20 = ((x + 8) - x2) * (y0 - y2) - ((y + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
+			
+			for (int i = 0; i < 4; i++) {
+				int sx = SAMPLE_PATTERN[i][0];
+				int sy = SAMPLE_PATTERN[i][1];
 
-			e01_1 += ((x + 6) - x0) * (y1 - y0) - ((y + 2) - y0) * (x1 - x0);
-			e12_1 += ((x + 6) - x1) * (y2 - y1) - ((y + 2) - y1) * (x2 - x1);
-			e20_1 += ((x + 6) - x2) * (y0 - y2) - ((y + 2) - y2) * (x0 - x2);
-			if (e01_1 > 0 && e12_1 > 0 && e20_1 > 0) {
-				fb->data[py * fb->width + px][1] = c;
-			}
-
-			e01_2 += ((x + 10) - x0) * (y1 - y0) - ((y + 14) - y0) * (x1 - x0);
-			e12_2 += ((x + 10) - x1) * (y2 - y1) - ((y + 14) - y1) * (x2 - x1);
-			e20_2 += ((x + 10) - x2) * (y0 - y2) - ((y + 14) - y2) * (x0 - x2);
-			if (e01_2 > 0 && e12_2 > 0 && e20_2 > 0) {
-				fb->data[py * fb->width + px][2] = c;
-			}
-
-			e01_3 += ((x + 14) - x0) * (y1 - y0) - ((y + 6) - y0) * (x1 - x0);
-			e12_3 += ((x + 14) - x1) * (y2 - y1) - ((y + 6) - y1) * (x2 - x1);
-			e20_3 += ((x + 14) - x2) * (y0 - y2) - ((y + 6) - y2) * (x0 - x2);
-			if (e01_3 > 0 && e12_3 > 0 && e20_3 > 0) {
-				fb->data[py * fb->width + px][3] = c;
+				if ((e01 + sx * (y1 - y0) + sy * (x1 - x0)) > 0 &&
+					(e12 + sx * (y2 - y1) + sy * (x2 - x1)) > 0 &&
+					(e20 + sx * (y0 - y2) + sy * (x0 - x2)) > 0) {
+					fb->data[py * fb->width + px][i] = c;
+				}
 			}
 		}
 	}
