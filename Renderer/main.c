@@ -32,6 +32,13 @@ rgb* pixels;
 int pitch;
 
 typedef struct {
+	int x;
+	int y;
+	float u;
+	float v;
+} Vertex;
+
+typedef struct {
 	int width;
 	int height;
 	rgb(*data)[4];
@@ -65,7 +72,7 @@ void MS_multisample_resolve(MultisampleFramebuffer* fb, rgb* dest) {
 				((*ms_pixel)[0].g + (*ms_pixel)[1].g + (*ms_pixel)[2].g + (*ms_pixel)[3].g) / 4,
 				((*ms_pixel)[0].b + (*ms_pixel)[1].b + (*ms_pixel)[2].b + (*ms_pixel)[3].b) / 4,
 			};
-			/*rgb c = {
+			/*c = (rgb){
 				(*ms_pixel)[0].r,
 				(*ms_pixel)[0].g,
 				(*ms_pixel)[0].b,
@@ -82,13 +89,13 @@ int SAMPLE_PATTERN[4][2] = {
 	{2, 6},
 };
 
-void MS_tri(MultisampleFramebuffer* fb, int x0, int y0, int x1, int y1, int x2, int y2, rgb c) {
-	x0 *= 16;
-	y0 *= 16;
-	x1 *= 16;
-	y1 *= 16;
-	x2 *= 16;
-	y2 *= 16;
+void MS_tri(MultisampleFramebuffer* fb, Vertex v[3]) {
+	int x0 = v[0].x * 16;
+	int y0 = v[0].y * 16;
+	int x1 = v[1].x * 16;
+	int y1 = v[1].y * 16;
+	int x2 = v[2].x * 16;
+	int y2 = v[2].y * 16;
 
 	int left = min(min(x0, x1), x2) & ~15;
 	int right = max(max(x0, x1), x2) & ~15;
@@ -104,22 +111,27 @@ void MS_tri(MultisampleFramebuffer* fb, int x0, int y0, int x1, int y1, int x2, 
 			int e12 = ((x + 8) - x1) * (y2 - y1) - ((y + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
 			int e20 = ((x + 8) - x2) * (y0 - y2) - ((y + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
 			
+			// TODO Make this only calculate for fragments inside the triangle
+			float l0 = (float)e12 / (e01 + e12 + e20);
+			float l1 = (float)e20 / (e01 + e12 + e20);
+			float l2 = (float)e01 / (e01 + e12 + e20);
+
 			for (int i = 0; i < 4; i++) {
 				int sx = SAMPLE_PATTERN[i][0];
 				int sy = SAMPLE_PATTERN[i][1];
 
 				if ((e01 + sx * (y1 - y0) + sy * (x1 - x0)) > 0 &&
 					(e12 + sx * (y2 - y1) + sy * (x2 - x1)) > 0 &&
-					(e20 + sx * (y0 - y2) + sy * (x0 - x2)) > 0) {
-					fb->data[py * fb->width + px][i] = c;
+					(e20 + sx * (y0 - y2) + sy * (x0 - x2)) > 0)
+				{
+					float U = l0 * v[0].u + l1 * v[1].u + l2 * v[2].u;
+					float V = l0 * v[0].v + l1 * v[1].v + l2 * v[2].v;
+
+					fb->data[py * fb->width + px][i] = (rgb){U * 255, V * 255, 0};
 				}
 			}
 		}
 	}
-
-	/*fb->data[y0 * fb->width + x0][0] = (rgb){ 0, 255, 0 };
-	fb->data[y1 * fb->width + x1][0] = (rgb){ 0, 255, 0 };
-	fb->data[y2 * fb->width + x2][0] = (rgb){ 0, 255, 0 };*/
 }
 
 MultisampleFramebuffer fb;
@@ -130,8 +142,20 @@ void render() {
 	int mx;
 	int my;
 	SDL_GetMouseState(&mx, &my);
-	MS_tri(&fb, 0, 0, mx, my, 400, 50, (rgb) { 255, 0, 0 });
-	MS_tri(&fb, 400, 50, mx, my, 500, 300, (rgb) { 0, 255, 0 });
+
+	Vertex tri1[3] = {
+		{0, 0, 0, 0},
+		{mx, my, 1, 0},
+		{400, 50, 0, 1},
+	};
+	MS_tri(&fb, tri1);
+
+	Vertex tri2[3] = {
+		{400, 50, 0, 1},
+		{mx, my, 1, 0},
+		{500, 300, 1, 1},
+	};
+	MS_tri(&fb, tri2);
 
 	MS_multisample_resolve(&fb, pixels);
 }
