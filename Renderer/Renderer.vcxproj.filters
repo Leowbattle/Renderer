@@ -21,9 +21,24 @@
     <ClCompile Include="impl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="gr_math.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gr.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gr_math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="util.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
