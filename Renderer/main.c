@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
 	device = grDevice_Create();
 	device->fb = grFramebuffer_Create(screenWidth, screenHeight);
 
-	device->proj = mat4_perspective(deg2rad(90), (float)screenWidth / screenHeight, 0.1f, 10);
-	device->view = mat4_lookat((vec3) { 0, 0, 3 }, (vec3) { 0, 0, 0 }, (vec3) { 0, 1, 0 });
+	device->proj = mat4_perspective(deg2rad(90), (float)screenWidth / screenHeight, 0.1f, 100);
+	device->view = mat4_lookat((vec3) { 0, 0, 4 }, (vec3) { 0, 0, 0 }, (vec3) { 0, 1, 0 });
 
 	mesh.verts = verts;
 	mesh.indices = indices;
@@ -99,6 +99,8 @@ int main(int argc, char** argv) {
 
 		float T = frame / 60.0f;
 		mesh.modelMat = mat4_rotate_zyx(T, T, T);
+		mat4 tr = mat4_translate((vec3) { 0, 0, sinf(T) });
+		mesh.modelMat = mat4_mul(&tr, &mesh.modelMat);
 
 		render();
 

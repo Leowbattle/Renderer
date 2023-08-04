@@ -42,6 +42,7 @@ void grClear(grDevice* dev, rgb colour) {
 			fb->depth[i * fb->width + j] = 1;
 		}
 	}
+	
 }
 
 void grPoint(grDevice* dev, float x, float y, rgb colour) {
@@ -58,7 +59,7 @@ void grPixel(grDevice* dev, int x, int y, rgb colour) {
 	fb->colour[y * fb->width + x] = colour;
 }
 
-static void tri(grDevice* dev, int x0, int y0, int x1, int y1, int x2, int y2, vec3 c0, vec3 c1, vec3 c2) {
+static void tri(grDevice* dev, int x0, int y0, int x1, int y1, int x2, int y2, float z0, float z1, float z2, vec3 c0, vec3 c1, vec3 c2) {
 	grFramebuffer* fb = dev->fb;
 
 	int A = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
@@ -89,6 +90,23 @@ static void tri(grDevice* dev, int x0, int y0, int x1, int y1, int x2, int y2, v
 	top = max(top, 0);
 	bottom = min(bottom, (fb->height - 1) * 16);
 
+	/*x0 &= ~15;
+	y0 &= ~15;
+	x1 &= ~15;
+	y1 &= ~15;
+	x2 &= ~15;
+	y2 &= ~15;*/
+
+	c0.x /= z0;
+	c0.y /= z0;
+	c0.z /= z0;
+	c1.x /= z1;
+	c1.y /= z1;
+	c1.z /= z1;
+	c2.x /= z2;
+	c2.y /= z2;
+	c2.z /= z2;
+
 	for (int y = top; y <= bottom; y += 16) {
 		for (int x = left; x <= right; x += 16) {
 			int px = x / 16;
@@ -103,17 +121,29 @@ static void tri(grDevice* dev, int x0, int y0, int x1, int y1, int x2, int y2, v
 				float l1 = (float)e20 / (e01 + e12 + e20);
 				float l2 = (float)e01 / (e01 + e12 + e20);
 
+				float z = 1/(1/z0 * l0 + 1/z1 * l1 + 1/z2 * l2);
+				//z = clampf(z, 0, 1);
+
+				if (z > fb->depth[py * fb->width + px]) {
+					continue;
+				}
+
+				//rgb c = { z * 255, z * 255, z * 255 };
+
 				rgb c = {
-					(c0.x * l0 + c1.x * l1 + c2.x * l2) * 255,
-					(c0.y * l0 + c1.y * l1 + c2.y * l2) * 255,
-					(c0.z * l0 + c1.z * l1 + c2.z * l2) * 255,
+					z * (c0.x * l0 + c1.x * l1 + c2.x * l2) * 255,
+					z * (c0.y * l0 + c1.y * l1 + c2.y * l2) * 255,
+					z * (c0.z * l0 + c1.z * l1 + c2.z * l2) * 255,
 				};
 
 				fb->colour[py * fb->width + px] = c;
+				fb->depth[py * fb->width + px] = z;
 			}
 		}
 	}
 }
+
+#include <stdio.h>
 
 void grDraw(grDevice* dev, grMesh* mesh) {
 	mat4 vp = mat4_mul(&dev->proj, &dev->view);
@@ -142,6 +172,8 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		c_pos.z /= c_pos.w;
 		c_pos.w /= c_pos.w;
 
+		//printf("%f %f %f\n", a_pos.z, b_pos.z, c_pos.z);
+
 		int x0 = remapf(a_pos.x, -1, 1, 0, dev->fb->width) * 16;
 		int y0 = remapf(a_pos.y, -1, 1, dev->fb->height, 0) * 16;
 
@@ -151,6 +183,6 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		int x2 = remapf(c_pos.x, -1, 1, 0, dev->fb->width) * 16;
 		int y2 = remapf(c_pos.y, -1, 1, dev->fb->height, 0) * 16;
 
-		tri(dev, x0, y0, x1, y1, x2, y2, a.colour, b.colour, c.colour);
+		tri(dev, x0, y0, x1, y1, x2, y2, a_pos.z, b_pos.z, c_pos.z, a.colour, b.colour, c.colour);
 	}
 }
