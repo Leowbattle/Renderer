@@ -19,10 +19,15 @@ void grFramebuffer_Destroy(grFramebuffer* fb) {
 	free(fb);
 }
 
-//grTexture* grTexture_Create(int width, int height) {
-//	grTexture* tex = xmalloc(sizeof(grTexture));
-//	return tex;
-//}
+grTexture* grTexture_Create(int width, int height) {
+	grTexture* tex = xmalloc(sizeof(grTexture));
+	tex->width = width;
+	tex->height = height;
+	tex->filter = GR_LINEAR;
+	tex->wrapU = GR_CLAMP;
+	tex->wrapV = GR_CLAMP;
+	return tex;
+}
 
 grDevice* grDevice_Create(void) {
 	grDevice* dev = xmalloc(sizeof(grDevice));
@@ -66,6 +71,46 @@ typedef struct {
 	vec3 c;
 	vec2 uv;
 } VertexAttr;
+
+rgb Texture_sample(grTexture* tex, float u, float v) {
+	u *= tex->width;
+	v *= tex->height;
+
+	float t1;
+	if (u < 0.5f) t1 = 0;
+	else if (u > tex->width - 0.5f) t1 = 1;
+	else t1 = fractf(u - 0.5f);
+
+	float t2;
+	if (v < 0.5f) t2 = 0;
+	else if (v > tex->height - 0.5f) t2 = 1;
+	else t2 = fractf(v - 0.5f);
+
+	int x0 = u - 0.5f;
+	int x1 = u + 0.5f;
+
+	int y0 = v - 0.5f;
+	int y1 = v + 0.5f;
+
+	x0 = clampf(x0, 0, tex->width - 1);
+	x1 = clampf(x1, 0, tex->width - 1);
+
+	y0 = clampf(y0, 0, tex->height - 1);
+	y1 = clampf(y1, 0, tex->height - 1);
+
+	rgb c00 = tex->data[y0 * tex->width + x0];
+	rgb c10 = tex->data[y0 * tex->width + x1];
+	rgb c01 = tex->data[y1 * tex->width + x0];
+	rgb c11 = tex->data[y1 * tex->width + x1];
+
+	rgb c = {
+		lerpf(lerpf(c00.r, c10.r, t1), lerpf(c01.r, c11.r, t1), t2),
+		lerpf(lerpf(c00.g, c10.g, t1), lerpf(c01.g, c11.g, t1), t2),
+		lerpf(lerpf(c00.b, c10.b, t1), lerpf(c01.b, c11.b, t1), t2),
+	};
+
+	return c;
+}
 
 static void tri(grDevice* dev, VertexAttr attr[3]) {
 	grFramebuffer* fb = dev->fb;
@@ -120,12 +165,20 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 	c0.x /= z0;
 	c0.y /= z0;
 	c0.z /= z0;
+	uv0.x /= z0;
+	uv0.y /= z0;
+
 	c1.x /= z1;
 	c1.y /= z1;
 	c1.z /= z1;
+	uv1.x /= z1;
+	uv1.y /= z1;
+
 	c2.x /= z2;
 	c2.y /= z2;
 	c2.z /= z2;
+	uv2.x /= z2;
+	uv2.y /= z2;
 
 	for (int y = top; y <= bottom; y += 16) {
 		for (int x = left; x <= right; x += 16) {
@@ -148,15 +201,18 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 					continue;
 				}
 
-				//rgb c = { z * 255, z * 255, z * 255 };
-
 				rgb c = {
 					z * (c0.x * l0 + c1.x * l1 + c2.x * l2) * 255,
 					z * (c0.y * l0 + c1.y * l1 + c2.y * l2) * 255,
 					z * (c0.z * l0 + c1.z * l1 + c2.z * l2) * 255,
 				};
+				vec2 uv = {
+					z * (uv0.x * l0 + uv1.x * l1 + uv2.x * l2),
+					z * (uv0.y * l0 + uv1.y * l1 + uv2.y * l2),
+				};
+				rgb tc = Texture_sample(dev->tex, uv.x, uv.y);
 
-				fb->colour[py * fb->width + px] = c;
+				fb->colour[py * fb->width + px] = tc;
 				fb->depth[py * fb->width + px] = z;
 			}
 		}

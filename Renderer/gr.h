@@ -13,32 +13,34 @@ typedef struct {
 grFramebuffer* grFramebuffer_Create(int width, int height);
 void grFramebuffer_Destroy(grFramebuffer* fb);
 
-//typedef enum {
-//	GR_NEAREST,
-//	GR_LINEAR,
-//} grTextureFilter;
-//
-//typedef enum {
-//	GR_CLAMP,
-//	GR_REPEAT,
-//} grTextureWrapMode;
-//
-//typedef struct {
-//	int width;
-//	int height;
-//	rgb* data;
-//
-//	grTextureFilter filter;
-//	grTextureWrapMode wrapU;
-//	grTextureWrapMode wrapV;
-//} grTexture;
-//
-//grTexture* grTexture_Create(int width, int height);
+typedef enum {
+	GR_NEAREST,
+	GR_LINEAR,
+} grTextureFilter;
+
+typedef enum {
+	GR_CLAMP,
+	GR_REPEAT,
+} grTextureWrapMode;
+
+typedef struct {
+	int width;
+	int height;
+	rgb* data;
+
+	grTextureFilter filter;
+	grTextureWrapMode wrapU;
+	grTextureWrapMode wrapV;
+} grTexture;
+
+grTexture* grTexture_Create(int width, int height);
 
 typedef struct {
 	grFramebuffer* fb;
 	mat4 proj;
 	mat4 view;
+
+	grTexture* tex;
 } grDevice;
 
 grDevice* grDevice_Create(void);
