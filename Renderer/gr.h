@@ -51,6 +51,7 @@ void grPixel(grDevice* dev, int x, int y, rgb colour);
 typedef struct {
 	vec3 pos;
 	vec3 colour;
+	vec2 uv;
 } grVertex;
 
 typedef struct {

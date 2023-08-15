@@ -59,11 +59,38 @@ void grPixel(grDevice* dev, int x, int y, rgb colour) {
 	fb->colour[y * fb->width + x] = colour;
 }
 
-static void tri(grDevice* dev, int x0, int y0, int x1, int y1, int x2, int y2, float z0, float z1, float z2, vec3 c0, vec3 c1, vec3 c2) {
+typedef struct {
+	int x;
+	int y;
+	float z;
+	vec3 c;
+	vec2 uv;
+} VertexAttr;
+
+static void tri(grDevice* dev, VertexAttr attr[3]) {
 	grFramebuffer* fb = dev->fb;
+
+	int x0 = attr[0].x;
+	int y0 = attr[0].y;
+	float z0 = attr[0].z;
+	vec3 c0 = attr[0].c;
+	vec2 uv0 = attr[0].uv;
+
+	int x1 = attr[1].x;
+	int y1 = attr[1].y;
+	float z1 = attr[1].z;
+	vec3 c1 = attr[1].c;
+	vec2 uv1 = attr[1].uv;
+
+	int x2 = attr[2].x;
+	int y2 = attr[2].y;
+	float z2 = attr[2].z;
+	vec3 c2 = attr[2].c;
+	vec2 uv2 = attr[2].uv;
 
 	int A = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
 	if (A > 0) {
+		return;
 		int tmp;
 
 		tmp = x1;
@@ -89,13 +116,6 @@ static void tri(grDevice* dev, int x0, int y0, int x1, int y1, int x2, int y2, f
 	right = min(right, (fb->width - 1) * 16);
 	top = max(top, 0);
 	bottom = min(bottom, (fb->height - 1) * 16);
-
-	/*x0 &= ~15;
-	y0 &= ~15;
-	x1 &= ~15;
-	y1 &= ~15;
-	x2 &= ~15;
-	y2 &= ~15;*/
 
 	c0.x /= z0;
 	c0.y /= z0;
@@ -183,6 +203,12 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		int x2 = remapf(c_pos.x, -1, 1, 0, dev->fb->width) * 16;
 		int y2 = remapf(c_pos.y, -1, 1, dev->fb->height, 0) * 16;
 
-		tri(dev, x0, y0, x1, y1, x2, y2, a_pos.z, b_pos.z, c_pos.z, a.colour, b.colour, c.colour);
+		VertexAttr attr[3] = {
+			{x0, y0, a_pos.z, a.colour, a.uv},
+			{x1, y1, b_pos.z, b.colour, b.uv},
+			{x2, y2, c_pos.z, c.colour, c.uv},
+		};
+
+		tri(dev, attr);
 	}
 }
