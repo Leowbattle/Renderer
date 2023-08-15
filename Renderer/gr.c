@@ -44,7 +44,7 @@ void grClear(grDevice* dev, rgb colour) {
 	for (int i = 0; i < fb->height; i++) {
 		for (int j = 0; j < fb->width; j++) {
 			fb->colour[i * fb->width + j] = colour;
-			fb->depth[i * fb->width + j] = 1;
+			fb->depth[i * fb->width + j] = 0;
 		}
 	}
 	
@@ -162,23 +162,24 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 	top = max(top, 0);
 	bottom = min(bottom, (fb->height - 1) * 16);
 
-	c0.x /= z0;
+	/*c0.x /= z0;
 	c0.y /= z0;
 	c0.z /= z0;
-	uv0.x /= z0;
-	uv0.y /= z0;
 
 	c1.x /= z1;
 	c1.y /= z1;
 	c1.z /= z1;
-	uv1.x /= z1;
-	uv1.y /= z1;
 
 	c2.x /= z2;
 	c2.y /= z2;
-	c2.z /= z2;
+	c2.z /= z2;*/
+	
+	/*uv0.x /= z0;
+	uv0.y /= z0;
+	uv1.x /= z1;
+	uv1.y /= z1;
 	uv2.x /= z2;
-	uv2.y /= z2;
+	uv2.y /= z2;*/
 
 	for (int y = top; y <= bottom; y += 16) {
 		for (int x = left; x <= right; x += 16) {
@@ -197,14 +198,14 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 				float z = 1/(1/z0 * l0 + 1/z1 * l1 + 1/z2 * l2);
 				//z = clampf(z, 0, 1);
 
-				if (z > fb->depth[py * fb->width + px]) {
+				if (z < fb->depth[py * fb->width + px]) {
 					continue;
 				}
 
-				rgb c = {
-					z * (c0.x * l0 + c1.x * l1 + c2.x * l2) * 255,
-					z * (c0.y * l0 + c1.y * l1 + c2.y * l2) * 255,
-					z * (c0.z * l0 + c1.z * l1 + c2.z * l2) * 255,
+				vec3 vc = {
+					z * (c0.x * l0 + c1.x * l1 + c2.x * l2),
+					z * (c0.y * l0 + c1.y * l1 + c2.y * l2),
+					z * (c0.z * l0 + c1.z * l1 + c2.z * l2),
 				};
 				vec2 uv = {
 					z * (uv0.x * l0 + uv1.x * l1 + uv2.x * l2),
@@ -212,7 +213,13 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 				};
 				rgb tc = Texture_sample(dev->tex, uv.x, uv.y);
 
-				fb->colour[py * fb->width + px] = tc;
+				rgb c = {
+					vc.x * tc.r,
+					vc.y * tc.g,
+					vc.z * tc.b,
+				};
+
+				fb->colour[py * fb->width + px] = c;
 				fb->depth[py * fb->width + px] = z;
 			}
 		}
@@ -233,20 +240,20 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		vec4 a_pos = mat4_mul_vec4(&mvp, (vec4) { a.pos.x, a.pos.y, a.pos.z, 1 });
 		a_pos.x /= a_pos.w;
 		a_pos.y /= a_pos.w;
-		a_pos.z /= a_pos.w;
-		a_pos.w /= a_pos.w;
+		//a_pos.z /= a_pos.w;
+		//a_pos.w /= a_pos.w;
 
 		vec4 b_pos = mat4_mul_vec4(&mvp, (vec4) { b.pos.x, b.pos.y, b.pos.z, 1 });
 		b_pos.x /= b_pos.w;
 		b_pos.y /= b_pos.w;
-		b_pos.z /= b_pos.w;
-		b_pos.w /= b_pos.w;
+		//b_pos.z /= b_pos.w;
+		//b_pos.w /= b_pos.w;
 
 		vec4 c_pos = mat4_mul_vec4(&mvp, (vec4) { c.pos.x, c.pos.y, c.pos.z, 1 });
 		c_pos.x /= c_pos.w;
 		c_pos.y /= c_pos.w;
-		c_pos.z /= c_pos.w;
-		c_pos.w /= c_pos.w;
+		//c_pos.z /= c_pos.w;
+		//c_pos.w /= c_pos.w;
 
 		//printf("%f %f %f\n", a_pos.z, b_pos.z, c_pos.z);
 
@@ -259,10 +266,27 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		int x2 = remapf(c_pos.x, -1, 1, 0, dev->fb->width) * 16;
 		int y2 = remapf(c_pos.y, -1, 1, dev->fb->height, 0) * 16;
 
+		a.colour.x /= a_pos.w;
+		a.colour.y /= a_pos.w;
+		a.colour.z /= a_pos.w;
+		b.colour.x /= b_pos.w;
+		b.colour.y /= b_pos.w;
+		b.colour.z /= b_pos.w;
+		c.colour.x /= c_pos.w;
+		c.colour.y /= c_pos.w;
+		c.colour.z /= c_pos.w;
+
+		a.uv.x /= a_pos.w;
+		a.uv.y /= a_pos.w;
+		b.uv.x /= b_pos.w;
+		b.uv.y /= b_pos.w;
+		c.uv.x /= c_pos.w;
+		c.uv.y /= c_pos.w;
+
 		VertexAttr attr[3] = {
-			{x0, y0, a_pos.z, a.colour, a.uv},
-			{x1, y1, b_pos.z, b.colour, b.uv},
-			{x2, y2, c_pos.z, c.colour, c.uv},
+			{x0, y0, a_pos.w, a.colour, a.uv},
+			{x1, y1, b_pos.w, b.colour, b.uv},
+			{x2, y2, c_pos.w, c.colour, c.uv},
 		};
 
 		tri(dev, attr);
