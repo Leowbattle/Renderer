@@ -30,52 +30,89 @@ int pitch;
 
 grDevice* device;
 
-grVertex verts[] = {
-	{{-1, -1, -1}, {0, 0, 0}, {0, 1}},
-	{{1, -1, -1}, {0, 0, 1}, {1, 1}},
-	{{-1, 1, -1}, {0, 1, 0}, {0, 0}},
-	{{1, 1, -1}, {0, 1, 1}, {1, 0}},
-
-	{{1, -1, -1}, {0, 0, 1}, {0, 1}},
-	{{1, -1, 1}, {1, 0, 0}, {1, 1}},
-	{{1, 1, -1}, {0, 1, 1}, {0, 0}},
-	{{1, 1, 1}, {1, 0, 1}, {1, 0}},
-
-	{{1, -1, 1}, {1, 0, 0}, {0, 1}},
-	{{-1, -1, 1}, {1, 1, 0}, {1, 1}},
-	{{1, 1, 1}, {1, 0, 1}, {0, 0}},
-	{{-1, 1, 1}, {1, 1, 1}, {1, 0}},
-
-	{{-1, -1, 1}, {1, 1, 0}, {0, 1}},
-	{{-1, -1, -1}, {0, 0, 0}, {1, 1}},
-	{{-1, 1, 1}, {1, 1, 1}, {0, 0}},
-	{{-1, 1, -1}, {0, 1, 0}, {1, 0}},
-
-	{{-1, 1, -1}, {0, 1, 0}, {0, 1}},
-	{{1, 1, -1}, {0, 1, 1}, {1, 1}},
-	{{-1, 1, 1}, {1, 1, 1}, {0, 0}},
-	{{1, 1, 1}, {1, 0, 1}, {1, 0}},
-
-	{{-1, -1, 1}, {1, 1, 0}, {0, 1}},
-	{{1, -1, 1}, {1, 0, 0}, {1, 1}},
-	{{-1, -1, -1}, {0, 0, 0}, {0, 0}},
-	{{1, -1, -1}, {0, 0, 1}, {1, 0}},
-};
-int indices[] = {
-	0, 1, 3,
-	0, 3, 2,
-	4, 5, 7,
-	4, 7, 6,
-	8, 9, 11,
-	8, 11, 10,
-	12, 13, 15,
-	12, 15, 14,
-	16, 17, 19,
-	16, 19, 18,
-	20, 21, 23,
-	20, 23, 22,
-};
 grMesh mesh;
+
+char texName[1024] = { 0 };
+void loadMesh(const char* path) {
+	// This function has a terminal case of C Programmer's Disease
+	// http://catb.org/jargon/html/C/C-Programmers-Disease.html
+
+	FILE* f = fopen(path, "r");
+	if (!f) {
+		printf("Unable to open file %s\n", path);
+		exit(EXIT_FAILURE);
+	}
+
+	char mtllib[1024] = { 0 };
+
+#define LINE_MAX 1024
+	char line[LINE_MAX];
+
+#define MAX_VERTS 2048
+	vec3* verts = malloc(MAX_VERTS * sizeof(vec3));
+	vec2* uvs = malloc(MAX_VERTS * sizeof(vec2));
+	int nverts = 0;
+	int nuvs = 0;
+
+	mesh.verts = malloc(MAX_VERTS * sizeof(grVertex));
+	mesh.indices = malloc(MAX_VERTS * 3 * sizeof(int));
+	mesh.count = 0;
+	int NNN = 0;
+
+	while (fgets(line, LINE_MAX, f)) {
+		vec3 v;
+		vec2 uv;
+
+		int v0, uv0, v1, uv1, v2, uv2;
+
+		// This code has a buffer overrun if the mtllib name is 1023 characters or longer
+		// But for this example it should be fine
+		// scanf sucks, libc sucks
+		if (sscanf(line, "mtllib %s", mtllib) == 1) {
+			FILE* mtlf = fopen(mtllib, "r");
+
+			char line2[LINE_MAX];
+			while (fgets(line2, LINE_MAX, mtlf)) {
+				if (sscanf(line2, "map_Kd %s", texName) == 1) {
+
+				}
+			}
+
+			fclose(mtlf);
+		}
+		else if (sscanf(line, "v %f %f %f", &v.x, &v.y, &v.z)) {
+			if (nverts == MAX_VERTS) {
+				printf("Too many vertices\n");
+				exit(EXIT_FAILURE);
+			}
+
+			verts[nverts++] = v;
+		}
+		else if (sscanf(line, "vt %f %f", &uv.x, &uv.y)) {
+			if (nuvs == MAX_VERTS) {
+				printf("Too many vertices\n");
+				exit(EXIT_FAILURE);
+			}
+
+			uv.y = 1 - uv.y;
+			uvs[nuvs++] = uv;
+		}
+		else if (sscanf(line, "f %d/%d %d/%d %d/%d", &v0, &uv0, &v1, &uv1, &v2, &uv2)) {
+			mesh.verts[NNN] = (grVertex){ verts[v0 - 1], uvs[uv0 - 1] };
+			mesh.indices[NNN] = NNN++;
+
+			mesh.verts[NNN] = (grVertex){ verts[v2 - 1], uvs[uv2 - 1] };
+			mesh.indices[NNN] = NNN++;
+			
+			mesh.verts[NNN] = (grVertex){ verts[v1 - 1], uvs[uv1 - 1] };
+			mesh.indices[NNN] = NNN++;
+
+			mesh.count++;
+		}
+	}
+
+	fclose(f);
+}
 
 void render() {
 	grClear(device, (rgb) { 255, 255, 255 });
@@ -99,17 +136,15 @@ int main(int argc, char** argv) {
 	device->fb = grFramebuffer_Create(screenWidth, screenHeight);
 
 	device->proj = mat4_perspective(deg2rad(90), (float)screenWidth / screenHeight, 0.1f, 100);
-	device->view = mat4_lookat((vec3) { 0, 0, 4 }, (vec3) { 0, 0, 0 }, (vec3) { 0, 1, 0 });
+	device->view = mat4_lookat((vec3) { 0, -3, 4 }, (vec3) { 0, 0, 0 }, (vec3) { 0, 1, 0 });
 
-	mesh.verts = verts;
-	mesh.indices = indices;
-	mesh.count = 12;
+	loadMesh("cactus.obj");
 	mesh.modelMat = mat4_identity();
 
 	int tw;
 	int th;
 	int comp;
-	rgb* texData = stbi_load("mario.png", &tw, &th, &comp, 3);
+	rgb* texData = stbi_load(texName, &tw, &th, &comp, 3);
 	device->tex = grTexture_Create(tw, th);
 	device->tex->data = texData;
 
@@ -125,8 +160,8 @@ int main(int argc, char** argv) {
 		SDL_LockTexture(texture, NULL, (void**)&pixels, &pitch);
 
 		float T = frame / 60.0f;
-		mesh.modelMat = mat4_rotate_zyx(T, T, T);
-		mat4 tr = mat4_translate((vec3) { 0, 0, sinf(T) });
+		mesh.modelMat = mat4_rotate_zyx(0, T, 0);
+		mat4 tr = mat4_translate((vec3) { 0, -1, 0 });
 		mesh.modelMat = mat4_mul(&tr, &mesh.modelMat);
 
 		render();

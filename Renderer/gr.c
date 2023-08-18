@@ -44,7 +44,7 @@ void grClear(grDevice* dev, rgb colour) {
 	for (int i = 0; i < fb->height; i++) {
 		for (int j = 0; j < fb->width; j++) {
 			fb->colour[i * fb->width + j] = colour;
-			fb->depth[i * fb->width + j] = 0;
+			fb->depth[i * fb->width + j] = 1;
 		}
 	}
 	
@@ -63,14 +63,6 @@ void grPixel(grDevice* dev, int x, int y, rgb colour) {
 	}
 	fb->colour[y * fb->width + x] = colour;
 }
-
-typedef struct {
-	int x;
-	int y;
-	float z;
-	vec3 c;
-	vec2 uv;
-} VertexAttr;
 
 rgb Texture_sample(grTexture* tex, float u, float v) {
 	u *= tex->width;
@@ -112,44 +104,34 @@ rgb Texture_sample(grTexture* tex, float u, float v) {
 	return c;
 }
 
+typedef struct {
+	int x;
+	int y;
+	float z;
+	vec2 uv;
+} VertexAttr;
+
 static void tri(grDevice* dev, VertexAttr attr[3]) {
 	grFramebuffer* fb = dev->fb;
 
 	int x0 = attr[0].x;
 	int y0 = attr[0].y;
 	float z0 = attr[0].z;
-	vec3 c0 = attr[0].c;
 	vec2 uv0 = attr[0].uv;
 
 	int x1 = attr[1].x;
 	int y1 = attr[1].y;
 	float z1 = attr[1].z;
-	vec3 c1 = attr[1].c;
 	vec2 uv1 = attr[1].uv;
 
 	int x2 = attr[2].x;
 	int y2 = attr[2].y;
 	float z2 = attr[2].z;
-	vec3 c2 = attr[2].c;
 	vec2 uv2 = attr[2].uv;
 
 	int A = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
 	if (A > 0) {
 		return;
-		int tmp;
-
-		tmp = x1;
-		x1 = x2;
-		x2 = tmp;
-
-		tmp = y1;
-		y1 = y2;
-		y2 = tmp;
-
-		vec3 tmpc;
-		tmpc = c1;
-		c1 = c2;
-		c2 = tmpc;
 	}
 	
 	int left = min(min(x0, x1), x2) & ~15;
@@ -161,25 +143,6 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 	right = min(right, (fb->width - 1) * 16);
 	top = max(top, 0);
 	bottom = min(bottom, (fb->height - 1) * 16);
-
-	/*c0.x /= z0;
-	c0.y /= z0;
-	c0.z /= z0;
-
-	c1.x /= z1;
-	c1.y /= z1;
-	c1.z /= z1;
-
-	c2.x /= z2;
-	c2.y /= z2;
-	c2.z /= z2;*/
-	
-	/*uv0.x /= z0;
-	uv0.y /= z0;
-	uv1.x /= z1;
-	uv1.y /= z1;
-	uv2.x /= z2;
-	uv2.y /= z2;*/
 
 	for (int y = top; y <= bottom; y += 16) {
 		for (int x = left; x <= right; x += 16) {
@@ -198,28 +161,17 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 				float z = 1/(1/z0 * l0 + 1/z1 * l1 + 1/z2 * l2);
 				//z = clampf(z, 0, 1);
 
-				if (z < fb->depth[py * fb->width + px]) {
+				if (z > fb->depth[py * fb->width + px]) {
 					continue;
 				}
 
-				vec3 vc = {
-					z * (c0.x * l0 + c1.x * l1 + c2.x * l2),
-					z * (c0.y * l0 + c1.y * l1 + c2.y * l2),
-					z * (c0.z * l0 + c1.z * l1 + c2.z * l2),
-				};
 				vec2 uv = {
 					z * (uv0.x * l0 + uv1.x * l1 + uv2.x * l2),
 					z * (uv0.y * l0 + uv1.y * l1 + uv2.y * l2),
 				};
 				rgb tc = Texture_sample(dev->tex, uv.x, uv.y);
 
-				rgb c = {
-					vc.x * tc.r,
-					vc.y * tc.g,
-					vc.z * tc.b,
-				};
-
-				fb->colour[py * fb->width + px] = c;
+				fb->colour[py * fb->width + px] = tc;
 				fb->depth[py * fb->width + px] = z;
 			}
 		}
@@ -240,19 +192,19 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		vec4 a_pos = mat4_mul_vec4(&mvp, (vec4) { a.pos.x, a.pos.y, a.pos.z, 1 });
 		a_pos.x /= a_pos.w;
 		a_pos.y /= a_pos.w;
-		//a_pos.z /= a_pos.w;
+		a_pos.z /= a_pos.w;
 		//a_pos.w /= a_pos.w;
 
 		vec4 b_pos = mat4_mul_vec4(&mvp, (vec4) { b.pos.x, b.pos.y, b.pos.z, 1 });
 		b_pos.x /= b_pos.w;
 		b_pos.y /= b_pos.w;
-		//b_pos.z /= b_pos.w;
+		b_pos.z /= b_pos.w;
 		//b_pos.w /= b_pos.w;
 
 		vec4 c_pos = mat4_mul_vec4(&mvp, (vec4) { c.pos.x, c.pos.y, c.pos.z, 1 });
 		c_pos.x /= c_pos.w;
 		c_pos.y /= c_pos.w;
-		//c_pos.z /= c_pos.w;
+		c_pos.z /= c_pos.w;
 		//c_pos.w /= c_pos.w;
 
 		//printf("%f %f %f\n", a_pos.z, b_pos.z, c_pos.z);
@@ -266,27 +218,17 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		int x2 = remapf(c_pos.x, -1, 1, 0, dev->fb->width) * 16;
 		int y2 = remapf(c_pos.y, -1, 1, dev->fb->height, 0) * 16;
 
-		a.colour.x /= a_pos.w;
-		a.colour.y /= a_pos.w;
-		a.colour.z /= a_pos.w;
-		b.colour.x /= b_pos.w;
-		b.colour.y /= b_pos.w;
-		b.colour.z /= b_pos.w;
-		c.colour.x /= c_pos.w;
-		c.colour.y /= c_pos.w;
-		c.colour.z /= c_pos.w;
-
-		a.uv.x /= a_pos.w;
-		a.uv.y /= a_pos.w;
-		b.uv.x /= b_pos.w;
-		b.uv.y /= b_pos.w;
-		c.uv.x /= c_pos.w;
-		c.uv.y /= c_pos.w;
+		a.uv.x /= a_pos.z;
+		a.uv.y /= a_pos.z;
+		b.uv.x /= b_pos.z;
+		b.uv.y /= b_pos.z;
+		c.uv.x /= c_pos.z;
+		c.uv.y /= c_pos.z;
 
 		VertexAttr attr[3] = {
-			{x0, y0, a_pos.w, a.colour, a.uv},
-			{x1, y1, b_pos.w, b.colour, b.uv},
-			{x2, y2, c_pos.w, c.colour, c.uv},
+			{x0, y0, a_pos.z, a.uv},
+			{x1, y1, b_pos.z, b.uv},
+			{x2, y2, c_pos.z, c.uv},
 		};
 
 		tri(dev, attr);
