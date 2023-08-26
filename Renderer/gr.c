@@ -44,14 +44,18 @@ int int_log2(int x) {
 }
 
 void grTexture_SetData(grTexture* tex, rgb* data, int width, int height) {
+	// For now I will only support square power of 2 textures
+	// it just makes things easier
 	assert(IsPowerOfTwo(width));
 	assert(IsPowerOfTwo(height));
 	assert(width == height);
 
+	// Calculate number of mipmaps required
 	int numLevels = int_log2(width) + 1;
 	tex->numMipmaps = numLevels;
 	tex->mipmaps = xmalloc(numLevels * sizeof(grMipmapLevel));
 
+	// Allocate mipmaps
 	int mipSize = width;
 	for (int i = 0; i < numLevels; i++) {
 		grMipmapLevel* mip = &tex->mipmaps[i];
@@ -61,8 +65,10 @@ void grTexture_SetData(grTexture* tex, rgb* data, int width, int height) {
 		mipSize /= 2;
 	}
 
+	// First mipmap is just the original data
 	memcpy(tex->mipmaps[0].data, data, width * height * sizeof(rgb));
 
+	// Generate mipmap chain
 	// I want to use i and j for y and x like in every other loop
 	for (int i_m = 1; i_m < numLevels; i_m++) {
 		grMipmapLevel* mip = &tex->mipmaps[i_m];
@@ -202,11 +208,18 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 	float z2 = attr[2].z;
 	vec2 uv2 = attr[2].uv;
 
+	// Cull backfaces
 	int A = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
 	if (A > 0) {
 		return;
 	}
 
+	// Compute bounding box of the triangle.
+	// TODO: Implement proper triangle clipping
+	// Current implementation will waste time shading pixels
+	// that will be discarded because their z values are not in [0-1]
+	// BTW my program doesn't actually discard these pixels anyway
+	// because this is kind of bodged together.
 	int left = min(min(x0, x1), x2) & ~15;
 	int right = max(max(x0, x1), x2) & ~15;
 	int top = min(min(y0, y1), y2) & ~15;

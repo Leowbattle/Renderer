@@ -3,6 +3,7 @@
 
 #include "gr_math.h"
 
+// TODO Allow this to be set at runtime
 #define MSAA_SAMPLES 4
 
 typedef struct {
@@ -39,6 +40,7 @@ typedef struct {
 	grMipmapLevel* mipmaps;
 	int numMipmaps;
 
+	// For now these are unimplemented and just ignored
 	grTextureFilter filter;
 	grTextureWrapMode wrapU;
 	grTextureWrapMode wrapV;
