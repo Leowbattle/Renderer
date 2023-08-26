@@ -3,6 +3,10 @@
 
 #include "gr_math.h"
 
+float squaref(float x) {
+	return x * x;
+}
+
 float clampf(float x, float a, float b) {
 	if (x < a) return a;
 	if (x > b) return b;
@@ -97,6 +101,15 @@ vec4 mat4_mul_vec4(mat4* m, vec4 v) {
 		v.x * M[4] + v.y * M[5] + v.z * M[6] + v.w * M[7],
 		v.x * M[8] + v.y * M[9] + v.z * M[10] + v.w * M[11],
 		v.x * M[12] + v.y * M[13] + v.z * M[14] + v.w * M[15],
+	};
+}
+
+mat4 mat4_scale(vec3 v) {
+	return (mat4) {
+		v.x, 0, 0, 0,
+		0, v.y, 0, 0,
+		0, 0, v.z, 0,
+		0, 0, 0, 1,
 	};
 }
 

@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <assert.h>
 
 #include "util.h"
@@ -180,6 +181,7 @@ typedef struct {
 	int x;
 	int y;
 	float z;
+	float w;
 	vec2 uv;
 } VertexAttr;
 
@@ -189,6 +191,9 @@ int SAMPLE_PATTERN[4][2] = {
 	{-6, 2},
 	{2, 6},
 };
+
+// TODO allocate extra border memory for shading
+// so if part of the quad is off the left or bottom of the screen it doesn't crash
 
 static void tri(grDevice* dev, VertexAttr attr[3]) {
 	grFramebuffer* fb = dev->fb;
@@ -230,57 +235,125 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 	top = max(top, 0);
 	bottom = min(bottom, (fb->height - 1) * 16);
 
-	for (int y = top; y <= bottom; y += 16) {
-		for (int x = left; x <= right; x += 16) {
-			int px = x / 16;
-			int py = y / 16;
+	for (int y = top; y <= bottom; y += 32) {
+		for (int x = left; x <= right; x += 32) {
+			// 0: x, y
+			// 1: x + 1, y
+			// 2: x, y + 1
+			// 3: x + 1, y + 1
 
-			int e01 = ((x + 8) - x0) * (y1 - y0) - ((y + 8) - y0) * (x1 - x0) + ((y0 == y1 && x1 < x0) || (y1 < y0));
-			int e12 = ((x + 8) - x1) * (y2 - y1) - ((y + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
-			int e20 = ((x + 8) - x2) * (y0 - y2) - ((y + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
+			int px[4] = { x / 16, x / 16 + 1,x / 16,x / 16 + 1 };
+			int py[4] = { y / 16,y / 16,y / 16 + 1,y / 16 + 1 };
 
-			int coverage = 0;
-			for (int i = 0; i < 4; i++) {
-				int sx = SAMPLE_PATTERN[i][0];
-				int sy = SAMPLE_PATTERN[i][1];
+			int e01[4];
+			e01[0] = ((x + 8) - x0) * (y1 - y0) - ((y + 8) - y0) * (x1 - x0) + ((y0 == y1 && x1 < x0) || (y1 < y0));
+			e01[1] = (((x + 16) + 8) - x0) * (y1 - y0) - ((y + 8) - y0) * (x1 - x0) + ((y0 == y1 && x1 < x0) || (y1 < y0));
+			e01[2] = ((x + 8) - x0) * (y1 - y0) - (((y + 16) + 8) - y0) * (x1 - x0) + ((y0 == y1 && x1 < x0) || (y1 < y0));
+			e01[3] = (((x + 16) + 8) - x0) * (y1 - y0) - (((y + 16) + 8) - y0) * (x1 - x0) + ((y0 == y1 && x1 < x0) || (y1 < y0));
 
-				if ((e01 + sx * (y1 - y0) + sy * (x1 - x0)) > 0 &&
-					(e12 + sx * (y2 - y1) + sy * (x2 - x1)) > 0 &&
-					(e20 + sx * (y0 - y2) + sy * (x0 - x2)) > 0) {
-					coverage |= 1 << i;
-				}
-			}
+			int e12[4];
+			e12[0] = ((x + 8) - x1) * (y2 - y1) - ((y + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
+			e12[1] = (((x + 16) + 8) - x1) * (y2 - y1) - ((y + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
+			e12[2] = ((x + 8) - x1) * (y2 - y1) - (((y + 16) + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
+			e12[3] = (((x + 16) + 8) - x1) * (y2 - y1) - (((y + 16) + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
 
-			if (coverage != 0) {
-				float l0 = (float)e12 / (e01 + e12 + e20);
-				float l1 = (float)e20 / (e01 + e12 + e20);
-				float l2 = (float)e01 / (e01 + e12 + e20);
+			int e20[4];
+			e20[0] = ((x + 8) - x2) * (y0 - y2) - ((y + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
+			e20[1] = (((x + 16) + 8) - x2) * (y0 - y2) - ((y + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
+			e20[2] = ((x + 8) - x2) * (y0 - y2) - (((y + 16) + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
+			e20[3] = (((x + 16) + 8) - x2) * (y0 - y2) - (((y + 16) + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
 
-				float z = 1 / (1 / z0 * l0 + 1 / z1 * l1 + 1 / z2 * l2);
-				//z = clampf(z, 0, 1);
+			int coverage[4] = { 0 };
+			float l0[4];
+			float l1[4];
+			float l2[4];
+			float z[4];
+			vec2 uv[4];
 
-				for (int i = 0; i < MSAA_SAMPLES; i++) {
-					if (z > fb->depth[py * fb->width + px][i]) {
-						coverage &= ~(1 << i);
+			for (int q = 0; q < 4; q++) {
+				for (int i = 0; i < 4; i++) {
+					int sx = SAMPLE_PATTERN[i][0];
+					int sy = SAMPLE_PATTERN[i][1];
+
+					if ((e01[q] + sx * (y1 - y0) + sy * (x1 - x0)) > 0 &&
+						(e12[q] + sx * (y2 - y1) + sy * (x2 - x1)) > 0 &&
+						(e20[q] + sx * (y0 - y2) + sy * (x0 - x2)) > 0) {
+						coverage[q] |= 1 << i;
 					}
 				}
-				if (coverage == 0) {
-					continue;
-				}
 
-				vec2 uv = {
-					z * (uv0.x * l0 + uv1.x * l1 + uv2.x * l2),
-					z * (uv0.y * l0 + uv1.y * l1 + uv2.y * l2),
-				};
-				rgb tc = Texture_sample(dev->tex, uv.x, uv.y, 2);
+				l0[q] = (float)e12[q] / (e01[q] + e12[q] + e20[q]);
+				l1[q] = (float)e20[q] / (e01[q] + e12[q] + e20[q]);
+				l2[q] = (float)e01[q] / (e01[q] + e12[q] + e20[q]);
 
-				rgb* c = fb->colour[py * fb->width + px];
-				float* d = fb->depth[py * fb->width + px];
+				z[q] = 1 / (1 / z0 * l0[q] + 1 / z1 * l1[q] + 1 / z2 * l2[q]);
 
 				for (int i = 0; i < MSAA_SAMPLES; i++) {
-					if (coverage & (1 << i)) {
+					if (z[q] > fb->depth[py[q] * fb->width + px[q]][i]) {
+						coverage[q] &= ~(1 << i);
+					}
+				}
+
+				float W = 1 / (1 / attr[0].w * l0[q] + 1 / attr[1].w * l1[q] + 1 / attr[2].w * l2[q]);
+				uv[q] = (vec2){
+					W * (uv0.x * l0[q] + uv1.x * l1[q] + uv2.x * l2[q])/* * dev->tex->width*/,
+					W * (uv0.y * l0[q] + uv1.y * l1[q] + uv2.y * l2[q])/* * dev->tex->width*/,
+				};
+				uv[q] = (vec2){
+					W * (uv0.x * l0[q] + uv1.x * l1[q] + uv2.x * l2[q]) * dev->tex->width,
+					W * (uv0.y * l0[q] + uv1.y * l1[q] + uv2.y * l2[q]) * dev->tex->width,
+				};
+			}
+
+			// Screen-space partial derivatives of uvs required for mipmapping
+			vec2 dFdx_uv[4] = {
+				{uv[1].x - uv[0].x, uv[1].y - uv[0].y},
+				{uv[1].x - uv[0].x, uv[1].y - uv[0].y},
+				{uv[3].x - uv[2].x, uv[3].y - uv[2].y},
+				{uv[3].x - uv[2].x, uv[3].y - uv[2].y},
+			};
+			vec2 dFdy_uv[4] = {
+				{uv[2].x - uv[0].x, uv[2].y - uv[0].y},
+				{uv[3].x - uv[1].x, uv[3].y - uv[1].y},
+				{uv[2].x - uv[0].x, uv[2].y - uv[0].y},
+				{uv[3].x - uv[1].x, uv[3].y - uv[1].y},
+			};
+
+			rgb MIPCOLOURS[] = {
+				{0, 0, 0},
+				{255, 0, 0},
+				{0, 255, 0},
+				{0, 0, 255},
+				{255, 255, 0},
+				{255, 0, 255},
+				{0, 255, 255},
+				{127, 127, 127}
+			};
+
+			for (int q = 0; q < 4; q++) {
+				//rgb tc = Texture_sample(dev->tex, uv[q].x, uv[q].y, 0);
+				rgb tc;
+				
+				float fx = squaref(dFdx_uv[q].x) + squaref(dFdx_uv[q].y);
+				float fy = squaref(dFdy_uv[q].x) + squaref(dFdy_uv[q].y);
+				float level = log2f(fmaxf(fx, fy)) / 2.f;
+				level = fmaxf(level, 0.);
+
+				rgb tc1 = MIPCOLOURS[(int)level];
+				rgb tc2 = MIPCOLOURS[(int)level + 1];
+				tc = (rgb){
+					lerpf(tc1.r, tc2.r, fmodf(level, 1.f)),
+					lerpf(tc1.g, tc2.g, fmodf(level, 1.f)),
+					lerpf(tc1.b, tc2.b, fmodf(level, 1.f)),
+				};
+				
+				rgb* c = fb->colour[py[q] * fb->width + px[q]];
+				float* d = fb->depth[py[q] * fb->width + px[q]];
+
+				for (int i = 0; i < MSAA_SAMPLES; i++) {
+					if (coverage[q] & (1 << i)) {
 						c[i] = tc;
-						d[i] = z;
+						d[i] = z[q];
 					}
 				}
 			}
@@ -328,17 +401,17 @@ void grDraw(grDevice* dev, grMesh* mesh) {
 		int x2 = remapf(c_pos.x, -1, 1, 0, dev->fb->width) * 16;
 		int y2 = remapf(c_pos.y, -1, 1, dev->fb->height, 0) * 16;
 
-		a.uv.x /= a_pos.z;
-		a.uv.y /= a_pos.z;
-		b.uv.x /= b_pos.z;
-		b.uv.y /= b_pos.z;
-		c.uv.x /= c_pos.z;
-		c.uv.y /= c_pos.z;
+		a.uv.x /= a_pos.w;
+		a.uv.y /= a_pos.w;
+		b.uv.x /= b_pos.w;
+		b.uv.y /= b_pos.w;
+		c.uv.x /= c_pos.w;
+		c.uv.y /= c_pos.w;
 
 		VertexAttr attr[3] = {
-			{x0, y0, a_pos.z, a.uv},
-			{x1, y1, b_pos.z, b.uv},
-			{x2, y2, c_pos.z, c.uv},
+			{x0, y0, a_pos.z, a_pos.w, a.uv},
+			{x1, y1, b_pos.z, b_pos.w, b.uv},
+			{x2, y2, c_pos.z, c_pos.w, c.uv},
 		};
 
 		tri(dev, attr);

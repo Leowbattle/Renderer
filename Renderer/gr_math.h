@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+float squaref(float x);
 float clampf(float x, float a, float b);
 float fractf(float x);
 float lerpf(float a, float b, float t);
@@ -42,6 +43,7 @@ mat4 mat4_identity();
 mat4 mat4_mul(mat4* a, mat4* b);
 vec4 mat4_mul_vec4(mat4* m, vec4 v);
 
+mat4 mat4_scale(vec3 v);
 mat4 mat4_translate(vec3 v);
 mat4 mat4_rotate_zyx(float z, float y, float x);
 mat4 mat4_frustum(float l, float r, float b, float t, float n, float f);

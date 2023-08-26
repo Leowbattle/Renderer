@@ -142,6 +142,18 @@ void render() {
 	//memcpy(pixels, device->fb->colour, screenWidth * screenHeight * sizeof(rgb));
 }
 
+grVertex PLANE_VERTS[4] = {
+	{{-1, 0, -1}, {0, 1}},
+	{{1, 0, -1} , {1, 1}},
+	{{1, 0, 1}, {1, 0}},
+	{{-1, 0, 1}, {0, 0}}
+};
+
+int PLANE_INDICES[6] = {
+	0, 1, 2,
+	0, 2, 3
+};
+
 int frame = 0;
 
 int main(int argc, char** argv) {
@@ -159,6 +171,9 @@ int main(int argc, char** argv) {
 	device->view = mat4_lookat((vec3) { 0, -3, 4 }, (vec3) { 0, 0, 0 }, (vec3) { 0, 1, 0 });
 
 	loadMesh("cactus.obj");
+	mesh.verts = PLANE_VERTS;
+	mesh.indices = PLANE_INDICES;
+	mesh.count = 2;
 	mesh.modelMat = mat4_identity();
 
 	int tw;
@@ -181,7 +196,10 @@ int main(int argc, char** argv) {
 
 		float T = frame / 60.0f;
 		mesh.modelMat = mat4_rotate_zyx(0, T, 0);
-		mat4 tr = mat4_translate((vec3) { 0, -1, 0 });
+		mat4 tr = mat4_translate((vec3) { 0, -10, 20*(1-sinf(T))+10 });
+		//mat4 tr = mat4_translate((vec3) { 0, -1, 0 });
+		mat4 scaleMat = mat4_scale((vec3) {10, 1, 10});
+		tr = mat4_mul(&tr, &scaleMat);
 		mesh.modelMat = mat4_mul(&tr, &mesh.modelMat);
 
 		render();
