@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <string.h>
+#include <assert.h>
 
 #include "util.h"
 
@@ -26,7 +28,60 @@ grTexture* grTexture_Create(int width, int height) {
 	tex->filter = GR_LINEAR;
 	tex->wrapU = GR_CLAMP;
 	tex->wrapV = GR_CLAMP;
+	tex->mipmaps = NULL;
+	tex->numMipmaps = 0;
 	return tex;
+}
+
+int IsPowerOfTwo(int x) {
+	return (x != 0) && ((x & (x - 1)) == 0);
+}
+
+int int_log2(int x) {
+	int l = 0;
+	while (x >>= 1) ++l;
+	return l;
+}
+
+void grTexture_SetData(grTexture* tex, rgb* data, int width, int height) {
+	assert(IsPowerOfTwo(width));
+	assert(IsPowerOfTwo(height));
+	assert(width == height);
+
+	int numLevels = int_log2(width) + 1;
+	tex->numMipmaps = numLevels;
+	tex->mipmaps = xmalloc(numLevels * sizeof(grMipmapLevel));
+
+	int mipSize = width;
+	for (int i = 0; i < numLevels; i++) {
+		grMipmapLevel* mip = &tex->mipmaps[i];
+		mip->width = mipSize;
+		mip->height = mipSize;
+		mip->data = xmalloc(mipSize * mipSize * sizeof(rgb));
+		mipSize /= 2;
+	}
+
+	memcpy(tex->mipmaps[0].data, data, width * height * sizeof(rgb));
+
+	// I want to use i and j for y and x like in every other loop
+	for (int i_m = 1; i_m < numLevels; i_m++) {
+		grMipmapLevel* mip = &tex->mipmaps[i_m];
+		grMipmapLevel* prev = &tex->mipmaps[i_m - 1];
+
+		for (int i = 0; i < mip->height; i++) {
+			for (int j = 0; j < mip->width; j++) {
+				rgb a = prev->data[i * 2 * prev->width + j * 2];
+				rgb b = prev->data[i * 2 * prev->width + j * 2 + 1];
+				rgb c = prev->data[(i * 2 + 1) * prev->width + j * 2];
+				rgb d = prev->data[(i * 2 + 1) * prev->width + j * 2 + 1];
+
+				int R = (a.r + b.r + c.r + d.r) / 4;
+				int G = (a.g + b.g + c.g + d.g) / 4;
+				int B = (a.b + b.b + c.b + d.b) / 4;
+				mip->data[i * mip->width + j] = (rgb){ R, G, B };
+			}
+		}
+	}
 }
 
 grDevice* grDevice_Create(void) {
@@ -72,18 +127,21 @@ void grPixel(grDevice* dev, int x, int y, rgb colour) {
 	}
 }
 
-rgb Texture_sample(grTexture* tex, float u, float v) {
-	u *= tex->width;
-	v *= tex->height;
+// GLSL: textureLOD
+rgb Texture_sample(grTexture* tex, float u, float v, int level) {
+	grMipmapLevel* mip = &tex->mipmaps[level];
+
+	u *= mip->width;
+	v *= mip->height;
 
 	float t1;
 	if (u < 0.5f) t1 = 0;
-	else if (u > tex->width - 0.5f) t1 = 1;
+	else if (u > mip->width - 0.5f) t1 = 1;
 	else t1 = fractf(u - 0.5f);
 
 	float t2;
 	if (v < 0.5f) t2 = 0;
-	else if (v > tex->height - 0.5f) t2 = 1;
+	else if (v > mip->height - 0.5f) t2 = 1;
 	else t2 = fractf(v - 0.5f);
 
 	int x0 = u - 0.5f;
@@ -92,16 +150,16 @@ rgb Texture_sample(grTexture* tex, float u, float v) {
 	int y0 = v - 0.5f;
 	int y1 = v + 0.5f;
 
-	x0 = clampf(x0, 0, tex->width - 1);
-	x1 = clampf(x1, 0, tex->width - 1);
+	x0 = clampf(x0, 0, mip->width - 1);
+	x1 = clampf(x1, 0, mip->width - 1);
 
-	y0 = clampf(y0, 0, tex->height - 1);
-	y1 = clampf(y1, 0, tex->height - 1);
+	y0 = clampf(y0, 0, mip->height - 1);
+	y1 = clampf(y1, 0, mip->height - 1);
 
-	rgb c00 = tex->data[y0 * tex->width + x0];
-	rgb c10 = tex->data[y0 * tex->width + x1];
-	rgb c01 = tex->data[y1 * tex->width + x0];
-	rgb c11 = tex->data[y1 * tex->width + x1];
+	rgb c00 = mip->data[y0 * mip->width + x0];
+	rgb c10 = mip->data[y0 * mip->width + x1];
+	rgb c01 = mip->data[y1 * mip->width + x0];
+	rgb c11 = mip->data[y1 * mip->width + x1];
 
 	rgb c = {
 		lerpf(lerpf(c00.r, c10.r, t1), lerpf(c01.r, c11.r, t1), t2),
@@ -201,7 +259,7 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 					z * (uv0.x * l0 + uv1.x * l1 + uv2.x * l2),
 					z * (uv0.y * l0 + uv1.y * l1 + uv2.y * l2),
 				};
-				rgb tc = Texture_sample(dev->tex, uv.x, uv.y);
+				rgb tc = Texture_sample(dev->tex, uv.x, uv.y, 2);
 
 				rgb* c = fb->colour[py * fb->width + px];
 				float* d = fb->depth[py * fb->width + px];

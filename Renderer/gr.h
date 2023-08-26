@@ -18,6 +18,8 @@ void grFramebuffer_Destroy(grFramebuffer* fb);
 typedef enum {
 	GR_NEAREST,
 	GR_LINEAR,
+	GR_NEAREST_MIPMAP_NEAREST,
+	GR_LINEAR_MIPMAP_LINEAR,
 } grTextureFilter;
 
 typedef enum {
@@ -29,6 +31,13 @@ typedef struct {
 	int width;
 	int height;
 	rgb* data;
+} grMipmapLevel;
+
+typedef struct {
+	int width;
+	int height;
+	grMipmapLevel* mipmaps;
+	int numMipmaps;
 
 	grTextureFilter filter;
 	grTextureWrapMode wrapU;
@@ -36,6 +45,7 @@ typedef struct {
 } grTexture;
 
 grTexture* grTexture_Create(int width, int height);
+void grTexture_SetData(grTexture* tex, rgb* data, int width, int height);
 
 typedef struct {
 	grFramebuffer* fb;

@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
 	int comp;
 	rgb* texData = stbi_load(texName, &tw, &th, &comp, 3);
 	device->tex = grTexture_Create(tw, th);
-	device->tex->data = texData;
+	grTexture_SetData(device->tex, texData, tw, th);
 
 	bool running = true;
 	while (running) {
