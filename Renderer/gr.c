@@ -8,8 +8,8 @@ grFramebuffer* grFramebuffer_Create(int width, int height) {
 	grFramebuffer* fb = xmalloc(sizeof(grFramebuffer));
 	fb->width = width;
 	fb->height = height;
-	fb->colour = xmalloc(width * height * sizeof(rgb));
-	fb->depth = xmalloc(width * height * sizeof(float));
+	fb->colour = xmalloc(width * height * sizeof(rgb) * MSAA_SAMPLES);
+	fb->depth = xmalloc(width * height * sizeof(float) * MSAA_SAMPLES);
 	return fb;
 }
 
@@ -43,11 +43,15 @@ void grClear(grDevice* dev, rgb colour) {
 	grFramebuffer* fb = dev->fb;
 	for (int i = 0; i < fb->height; i++) {
 		for (int j = 0; j < fb->width; j++) {
-			fb->colour[i * fb->width + j] = colour;
-			fb->depth[i * fb->width + j] = 1;
+			rgb* p = fb->colour[i * fb->width + j];
+			float* d = fb->depth[i * fb->width + j];
+			for (int i = 0; i < 4; i++) {
+				p[i] = colour;
+				d[i] = 1;
+			}
 		}
 	}
-	
+
 }
 
 void grPoint(grDevice* dev, float x, float y, rgb colour) {
@@ -61,7 +65,11 @@ void grPixel(grDevice* dev, int x, int y, rgb colour) {
 	if (x < 0 || x >= fb->width || y < 0 || y >= fb->height) {
 		return;
 	}
-	fb->colour[y * fb->width + x] = colour;
+
+	rgb* p = fb->colour[y * fb->width + x];
+	for (int i = 0; i < MSAA_SAMPLES; i++) {
+		p[i] = colour;
+	}
 }
 
 rgb Texture_sample(grTexture* tex, float u, float v) {
@@ -111,6 +119,13 @@ typedef struct {
 	vec2 uv;
 } VertexAttr;
 
+int SAMPLE_PATTERN[4][2] = {
+	{-2, -6},
+	{6, -2},
+	{-6, 2},
+	{2, 6},
+};
+
 static void tri(grDevice* dev, VertexAttr attr[3]) {
 	grFramebuffer* fb = dev->fb;
 
@@ -133,7 +148,7 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 	if (A > 0) {
 		return;
 	}
-	
+
 	int left = min(min(x0, x1), x2) & ~15;
 	int right = max(max(x0, x1), x2) & ~15;
 	int top = min(min(y0, y1), y2) & ~15;
@@ -153,15 +168,32 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 			int e12 = ((x + 8) - x1) * (y2 - y1) - ((y + 8) - y1) * (x2 - x1) + ((y1 == y2 && x2 < x1) || (y2 < y1));
 			int e20 = ((x + 8) - x2) * (y0 - y2) - ((y + 8) - y2) * (x0 - x2) + ((y2 == y0 && x0 < x2) || (y0 < y2));
 
-			if (e01 > 0 && e12 > 0 && e20 > 0) {
+			int coverage = 0;
+			for (int i = 0; i < 4; i++) {
+				int sx = SAMPLE_PATTERN[i][0];
+				int sy = SAMPLE_PATTERN[i][1];
+
+				if ((e01 + sx * (y1 - y0) + sy * (x1 - x0)) > 0 &&
+					(e12 + sx * (y2 - y1) + sy * (x2 - x1)) > 0 &&
+					(e20 + sx * (y0 - y2) + sy * (x0 - x2)) > 0) {
+					coverage |= 1 << i;
+				}
+			}
+
+			if (coverage != 0) {
 				float l0 = (float)e12 / (e01 + e12 + e20);
 				float l1 = (float)e20 / (e01 + e12 + e20);
 				float l2 = (float)e01 / (e01 + e12 + e20);
 
-				float z = 1/(1/z0 * l0 + 1/z1 * l1 + 1/z2 * l2);
+				float z = 1 / (1 / z0 * l0 + 1 / z1 * l1 + 1 / z2 * l2);
 				//z = clampf(z, 0, 1);
 
-				if (z > fb->depth[py * fb->width + px]) {
+				for (int i = 0; i < MSAA_SAMPLES; i++) {
+					if (z > fb->depth[py * fb->width + px][i]) {
+						coverage &= ~(1 << i);
+					}
+				}
+				if (coverage == 0) {
 					continue;
 				}
 
@@ -171,8 +203,15 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 				};
 				rgb tc = Texture_sample(dev->tex, uv.x, uv.y);
 
-				fb->colour[py * fb->width + px] = tc;
-				fb->depth[py * fb->width + px] = z;
+				rgb* c = fb->colour[py * fb->width + px];
+				float* d = fb->depth[py * fb->width + px];
+
+				for (int i = 0; i < MSAA_SAMPLES; i++) {
+					if (coverage & (1 << i)) {
+						c[i] = tc;
+						d[i] = z;
+					}
+				}
 			}
 		}
 	}

@@ -119,7 +119,27 @@ void render() {
 
 	grDraw(device, &mesh);
 
-	memcpy(pixels, device->fb->colour, screenWidth * screenHeight * sizeof(rgb));
+	grFramebuffer* fb = device->fb;
+
+	for (int i = 0; i < fb->height; i++) {
+		for (int j = 0; j < fb->width; j++) {
+			rgb* c = fb->colour[i * screenWidth + j];
+			int r = 0, g = 0, b = 0;
+			for (int i = 0; i < MSAA_SAMPLES; i++) {
+				r += c[i].r;
+				g += c[i].g;
+				b += c[i].b;
+			}
+			r /= MSAA_SAMPLES;
+			g /= MSAA_SAMPLES;
+			b /= MSAA_SAMPLES;
+			/*r = c[0].r;
+			g = c[0].g;
+			b = c[0].b;*/
+			pixels[i * screenWidth + j] = (rgb){ r,g,b };
+		}
+	}
+	//memcpy(pixels, device->fb->colour, screenWidth * screenHeight * sizeof(rgb));
 }
 
 int frame = 0;

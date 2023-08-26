@@ -3,11 +3,13 @@
 
 #include "gr_math.h"
 
+#define MSAA_SAMPLES 4
+
 typedef struct {
 	int width;
 	int height;
-	rgb* colour;
-	float* depth;
+	rgb (*colour)[MSAA_SAMPLES];
+	float (*depth)[MSAA_SAMPLES];
 } grFramebuffer;
 
 grFramebuffer* grFramebuffer_Create(int width, int height);
