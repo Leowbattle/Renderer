@@ -269,6 +269,7 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 			float l2[4];
 			float z[4];
 			vec2 uv[4];
+			vec2 uvv[4];
 
 			for (int q = 0; q < 4; q++) {
 				for (int i = 0; i < 4; i++) {
@@ -299,7 +300,7 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 					W * (uv0.x * l0[q] + uv1.x * l1[q] + uv2.x * l2[q])/* * dev->tex->width*/,
 					W * (uv0.y * l0[q] + uv1.y * l1[q] + uv2.y * l2[q])/* * dev->tex->width*/,
 				};
-				uv[q] = (vec2){
+				uvv[q] = (vec2){
 					W * (uv0.x * l0[q] + uv1.x * l1[q] + uv2.x * l2[q]) * dev->tex->width,
 					W * (uv0.y * l0[q] + uv1.y * l1[q] + uv2.y * l2[q]) * dev->tex->width,
 				};
@@ -307,16 +308,16 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 
 			// Screen-space partial derivatives of uvs required for mipmapping
 			vec2 dFdx_uv[4] = {
-				{uv[1].x - uv[0].x, uv[1].y - uv[0].y},
-				{uv[1].x - uv[0].x, uv[1].y - uv[0].y},
-				{uv[3].x - uv[2].x, uv[3].y - uv[2].y},
-				{uv[3].x - uv[2].x, uv[3].y - uv[2].y},
+				{uvv[1].x - uvv[0].x, uvv[1].y - uvv[0].y},
+				{uvv[1].x - uvv[0].x, uvv[1].y - uvv[0].y},
+				{uvv[3].x - uvv[2].x, uvv[3].y - uvv[2].y},
+				{uvv[3].x - uvv[2].x, uvv[3].y - uvv[2].y},
 			};
 			vec2 dFdy_uv[4] = {
-				{uv[2].x - uv[0].x, uv[2].y - uv[0].y},
-				{uv[3].x - uv[1].x, uv[3].y - uv[1].y},
-				{uv[2].x - uv[0].x, uv[2].y - uv[0].y},
-				{uv[3].x - uv[1].x, uv[3].y - uv[1].y},
+				{uvv[2].x - uvv[0].x, uvv[2].y - uvv[0].y},
+				{uvv[3].x - uvv[1].x, uvv[3].y - uvv[1].y},
+				{uvv[2].x - uvv[0].x, uvv[2].y - uvv[0].y},
+				{uvv[3].x - uvv[1].x, uvv[3].y - uvv[1].y},
 			};
 
 			rgb MIPCOLOURS[] = {
@@ -331,21 +332,21 @@ static void tri(grDevice* dev, VertexAttr attr[3]) {
 			};
 
 			for (int q = 0; q < 4; q++) {
-				//rgb tc = Texture_sample(dev->tex, uv[q].x, uv[q].y, 0);
-				rgb tc;
-				
 				float fx = squaref(dFdx_uv[q].x) + squaref(dFdx_uv[q].y);
 				float fy = squaref(dFdy_uv[q].x) + squaref(dFdy_uv[q].y);
 				float level = log2f(fmaxf(fx, fy)) / 2.f;
 				level = fmaxf(level, 0.);
 
-				rgb tc1 = MIPCOLOURS[(int)level];
-				rgb tc2 = MIPCOLOURS[(int)level + 1];
-				tc = (rgb){
+				rgb tc1 = Texture_sample(dev->tex, uv[q].x, uv[q].y, fminf((int)level, dev->tex->numMipmaps - 1));
+				rgb tc2 = Texture_sample(dev->tex, uv[q].x, uv[q].y, fminf((int)level + 1, dev->tex->numMipmaps - 1));
+				/*rgb tc1 = MIPCOLOURS[(int)level];
+				rgb tc2 = MIPCOLOURS[(int)level + 1];*/
+				rgb tc = (rgb){
 					lerpf(tc1.r, tc2.r, fmodf(level, 1.f)),
 					lerpf(tc1.g, tc2.g, fmodf(level, 1.f)),
 					lerpf(tc1.b, tc2.b, fmodf(level, 1.f)),
 				};
+				//tc = Texture_sample(dev->tex, uv[q].x, uv[q].y, 0);
 				
 				rgb* c = fb->colour[py[q] * fb->width + px[q]];
 				float* d = fb->depth[py[q] * fb->width + px[q]];
